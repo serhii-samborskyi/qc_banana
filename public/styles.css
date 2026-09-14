@@ -365,14 +365,38 @@ textarea:focus {
   box-shadow: 0 0 0 3px rgba(46, 114, 81, 0.12);
 }
 
-.mini-grid {
+.mini-grid,
+.example-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
   gap: 10px;
   margin: 12px 0;
 }
 
+.example-grid {
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 14px;
+}
+
 .mini-image {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.example-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 10px;
+}
+
+.example-image-wrap {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -386,7 +410,14 @@ textarea:focus {
   object-fit: cover;
 }
 
-.mini-image button {
+.example-image-wrap img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.mini-image button,
+.delete-example {
   position: absolute;
   top: 5px;
   right: 5px;
@@ -397,6 +428,21 @@ textarea:focus {
   background: rgba(189, 51, 44, 0.95);
   color: #fff;
   font-weight: 900;
+}
+
+.example-card label {
+  gap: 5px;
+}
+
+.example-card input,
+.example-card select {
+  min-height: 38px;
+}
+
+.example-card .button {
+  min-height: 38px;
+  width: 100%;
+  padding: 0 10px;
 }
 
 .checkbox-row {

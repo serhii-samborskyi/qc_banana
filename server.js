@@ -229,6 +229,37 @@ app.delete("/api/tasks/:taskId/examples/:exampleId", async (req, res, next) => {
   }
 });
 
+app.patch("/api/tasks/:taskId/examples/:exampleId", async (req, res, next) => {
+  try {
+    const tasks = await getTasks();
+    const task = tasks.find((item) => item.id === req.params.taskId);
+    if (!task) {
+      return res.status(404).json({ error: "Task not found." });
+    }
+
+    const example = (task.examples || []).find((item) => item.id === req.params.exampleId);
+    if (!example) {
+      return res.status(404).json({ error: "Example image not found." });
+    }
+
+    const tagNumber = normalizeOptionalTagNumber(req.body?.tagNumber);
+    const cableColor = normalizeColor(req.body?.cableColor);
+    if (tagNumber === null) {
+      return res.status(400).json({ error: "Example tag number must contain only digits." });
+    }
+
+    example.tagNumber = tagNumber;
+    example.cableColor = cableColor;
+    example.updatedAt = new Date().toISOString();
+    task.updatedAt = example.updatedAt;
+
+    await writeJson(TASKS_FILE, tasks);
+    res.json(publicTask(task));
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/history", async (_req, res, next) => {
   try {
     res.json((await getHistory()).map(publicGeneration));
@@ -283,18 +314,28 @@ app.post("/api/generate", async (req, res, next) => {
     const model = cleanString(task.model) || settings.defaultModel || defaultSettings.defaultModel;
     const aspectRatio = normalizeAspectRatio(task.aspectRatio, settings.defaultAspectRatio);
     const imageSize = normalizeImageSize(task.imageSize, settings.defaultImageSize);
+    const sourceExample = pickSourceExample(task.examples || [], cleanColor);
     const prompt = buildPrompt(task.prompt, {
       taskName: task.name,
       addressNumber: cleanAddress,
-      cableColor: cleanColor
+      cableColor: cleanColor,
+      sourceTagNumber: sourceExample?.tagNumber || "",
+      sourceCableColor: sourceExample?.cableColor || ""
     });
 
     const input = [{ type: "text", text: prompt }];
-    for (const example of (task.examples || []).slice(0, 14)) {
-      const absolutePath = path.join(UPLOAD_DIR, example.filename);
-      const image = await readImageInput(absolutePath, example.mimeType);
+    if (sourceExample) {
+      const image = await readImageInput(path.join(UPLOAD_DIR, sourceExample.filename), sourceExample.mimeType);
       if (image) {
         input.push(image);
+      }
+    } else {
+      for (const example of (task.examples || []).slice(0, 14)) {
+        const absolutePath = path.join(UPLOAD_DIR, example.filename);
+        const image = await readImageInput(absolutePath, example.mimeType);
+        if (image) {
+          input.push(image);
+        }
       }
     }
 
@@ -332,6 +373,10 @@ app.post("/api/generate", async (req, res, next) => {
       filename,
       mimeType,
       prompt,
+      sourceExampleId: sourceExample?.id || "",
+      sourceExampleName: sourceExample?.originalName || "",
+      sourceTagNumber: sourceExample?.tagNumber || "",
+      sourceCableColor: sourceExample?.cableColor || "",
       interactionId: interaction.id || "",
       createdAt: new Date().toISOString()
     };
@@ -469,6 +514,8 @@ function filesToExamples(files = []) {
     filename: file.filename,
     originalName: file.originalname,
     mimeType: file.mimetype,
+    tagNumber: "",
+    cableColor: "",
     size: file.size,
     createdAt: new Date().toISOString()
   }));
@@ -512,6 +559,12 @@ function normalizeAddressNumber(value) {
   return /^\d{1,12}$/.test(number) ? number : "";
 }
 
+function normalizeOptionalTagNumber(value) {
+  const number = String(value || "").trim();
+  if (!number) return "";
+  return /^\d{1,12}$/.test(number) ? number : null;
+}
+
 function cleanString(value) {
   return String(value || "").trim();
 }
@@ -527,7 +580,30 @@ function normalizeImageSize(value, fallback) {
 }
 
 function buildPrompt(template, variables) {
-  const rendered = String(template || DEFAULT_PROMPT).replace(/\{\{\s*(addressNumber|cableColor|taskName)\s*\}\}/g, (_match, key) => variables[key] || "");
+  const rendered = String(template || DEFAULT_PROMPT).replace(
+    /\{\{\s*(addressNumber|cableColor|taskName|sourceTagNumber|sourceCableColor)\s*\}\}/g,
+    (_match, key) => variables[key] || ""
+  );
+
+  if (variables.sourceTagNumber) {
+    const cableInstruction =
+      variables.sourceCableColor && variables.sourceCableColor === variables.cableColor
+        ? `The source photo already has a ${variables.cableColor} cable; preserve that cable exactly.`
+        : `The requested cable color is ${variables.cableColor}. If the source photo cable is not ${variables.cableColor}, recolor only that cable with minimal editing and preserve its route, texture, fittings, bends, shadows, and thickness.`;
+
+    return `${rendered}
+
+Source-image edit instructions:
+- Use the uploaded source photo as the actual base image, not just inspiration.
+- Keep the same tap hardware, connector layout, tag shape, tag position, camera angle, focus, lighting, weathering, background, bushes/pole/pedestal, and all non-address markings.
+- The source tag currently shows address number ${variables.sourceTagNumber}.
+- Replace only the address number ${variables.sourceTagNumber} on the physical tag with ${variables.addressNumber}.
+- Match the same marker thickness, handwriting style, perspective, blur, shadows, and tag surface.
+- Do not add extra labels, serial numbers, barcodes, text, or a second tag.
+- ${cableInstruction}
+- The final image must look like the original phone photo with only the requested field edit.`;
+  }
+
   return `${rendered}
 
 Critical output checks:
@@ -535,6 +611,23 @@ Critical output checks:
 - The only address number shown is ${variables.addressNumber}.
 - The address number must be legible on a physical tag attached near the cable.
 - Use the uploaded example images as visual references for the tap hardware, connectors, field label/tag, and real-world camera look.`;
+}
+
+function pickSourceExample(examples, cableColor) {
+  const tagged = examples.filter((example) => normalizeOptionalTagNumber(example.tagNumber) && example.filename);
+  if (!tagged.length) return null;
+
+  const matchingColor = tagged.filter((example) => example.cableColor === cableColor);
+  if (matchingColor.length) return randomItem(matchingColor);
+
+  const unknownColor = tagged.filter((example) => !example.cableColor);
+  if (unknownColor.length) return randomItem(unknownColor);
+
+  return randomItem(tagged);
+}
+
+function randomItem(items) {
+  return items[Math.floor(Math.random() * items.length)];
 }
 
 async function readImageInput(file, mimeType) {

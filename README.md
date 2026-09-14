@@ -30,7 +30,10 @@ If you prefer a nested Coolify volume path such as `/data/qcbanana`, set `DATA_D
 
 1. Open `Settings` and add the Google AI API key.
 2. Open `Admin` and add reference images for the default task, or create new tasks with custom prompts.
-3. Open `Generate`, enter the address number, choose orange or black, and generate.
+3. For each uploaded example, save the current address tag number shown in the photo. Optionally set the cable color visible in that photo.
+4. Open `Generate`, enter the address number, choose orange or black, and generate.
+
+When a task has tagged examples, generation picks one random tagged example and asks Nano Banana to preserve the photo while replacing only the saved tag number with the requested address number. If an example cable color matches the requested cable color, that example is preferred.
 
 Prompt templates can use:
 
@@ -38,4 +41,6 @@ Prompt templates can use:
 {{addressNumber}}
 {{cableColor}}
 {{taskName}}
+{{sourceTagNumber}}
+{{sourceCableColor}}
 ```

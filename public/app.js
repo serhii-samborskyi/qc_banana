@@ -65,6 +65,7 @@ function renderGenerator() {
   const latest = state.latestGeneration;
   const canGenerate = state.settings?.hasGoogleApiKey && state.tasks.length > 0 && !state.busy;
   const colors = task?.allowedColors?.length ? task.allowedColors : ["orange", "black"];
+  const taggedCount = task?.examples?.filter((example) => example.tagNumber)?.length || 0;
   if (!colors.includes(state.selectedColor)) {
     state.selectedColor = colors[0] || "orange";
   }
@@ -74,6 +75,7 @@ function renderGenerator() {
       <div class="panel">
         <h2>Generate QC Picture</h2>
         ${state.settings?.hasGoogleApiKey ? "" : `<div class="notice">Add your Google AI key in Settings before generating.</div>`}
+        ${taggedCount ? `<div class="notice">Using random tagged example as the edit source. Only the address number is replaced when possible.</div>` : ""}
         ${state.error ? `<div class="notice error">${escapeHtml(state.error)}</div>` : ""}
         ${state.message ? `<div class="notice">${escapeHtml(state.message)}</div>` : ""}
         <form id="generateForm" class="form-grid">
@@ -107,6 +109,7 @@ function renderGenerator() {
                <div class="actions" style="margin-top: 12px;">
                  <a class="button secondary" href="${latest.downloadUrl}" download>Download</a>
                  <span class="status ok">${escapeHtml(latest.cableColor)} cable · ${escapeHtml(latest.addressNumber)}</span>
+                 ${latest.sourceTagNumber ? `<span class="status ok">from ${escapeHtml(latest.sourceTagNumber)}</span>` : ""}
                </div>`
             : `<div class="empty-state">Generated tap pictures will appear here.</div>`
         }
@@ -217,7 +220,7 @@ function renderAdmin() {
             <span>Example Images</span>
             <input name="examples" type="file" accept="image/*" multiple />
           </label>
-          ${editing?.examples?.length ? `<div class="mini-grid">${editing.examples.map(exampleImage).join("")}</div>` : `<p class="small">Upload a few field examples for this task. They will be sent as visual references during generation.</p>`}
+          ${editing?.examples?.length ? `<div class="example-grid">${editing.examples.map(exampleImage).join("")}</div>` : `<p class="small">Upload examples, then save the current tag number shown in each photo.</p>`}
           <div class="actions">
             <button class="button primary" type="submit">${editing ? "Save Task" : "Create Task"}</button>
             ${editing ? `<button class="button secondary" id="newTaskButton" type="button">New Task</button>` : ""}
@@ -257,6 +260,9 @@ function renderAdmin() {
   });
   document.querySelectorAll("[data-delete-example]").forEach((button) => {
     button.addEventListener("click", () => deleteExample(button.dataset.taskId, button.dataset.deleteExample));
+  });
+  document.querySelectorAll("[data-save-example]").forEach((button) => {
+    button.addEventListener("click", () => updateExample(button.dataset.taskId, button.dataset.saveExample));
   });
 }
 
@@ -334,12 +340,35 @@ async function deleteExample(taskId, exampleId) {
   render();
 }
 
+async function updateExample(taskId, exampleId) {
+  const card = document.querySelector(`[data-example-card="${CSS.escape(exampleId)}"]`);
+  if (!card) return;
+
+  try {
+    const saved = await api(`/api/tasks/${taskId}/examples/${exampleId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tagNumber: card.querySelector("[data-example-tag]")?.value || "",
+        cableColor: card.querySelector("[data-example-color]")?.value || ""
+      })
+    });
+    state.tasks = state.tasks.map((task) => (task.id === saved.id ? saved : task));
+    state.message = "Example saved.";
+    state.error = "";
+  } catch (error) {
+    state.error = error.message;
+  }
+  render();
+}
+
 function taskCard(task) {
+  const taggedCount = task.examples?.filter((example) => example.tagNumber)?.length || 0;
   return `
     <article class="task-card ${task.id === state.editingTaskId ? "is-active" : ""}">
       <h3>${escapeHtml(task.name)}</h3>
       <p class="support">${escapeHtml(task.description || "No description")}</p>
-      <p class="small">${task.examples?.length || 0} reference image${task.examples?.length === 1 ? "" : "s"} · ${escapeHtml(task.aspectRatio || "3:4")} · ${escapeHtml(task.imageSize || "1K")}</p>
+      <p class="small">${taggedCount}/${task.examples?.length || 0} tagged · ${escapeHtml(task.aspectRatio || "3:4")} · ${escapeHtml(task.imageSize || "1K")}</p>
       <div class="actions">
         <button class="button secondary" type="button" data-edit-task="${escapeAttr(task.id)}">Edit</button>
         <button class="button danger" type="button" data-delete-task="${escapeAttr(task.id)}">Delete</button>
@@ -350,10 +379,23 @@ function taskCard(task) {
 
 function exampleImage(example) {
   return `
-    <div class="mini-image">
-      <img src="${example.url}" alt="${escapeAttr(example.originalName || "Reference image")}" />
-      <button type="button" title="Remove image" data-task-id="${escapeAttr(state.editingTaskId)}" data-delete-example="${escapeAttr(example.id)}">×</button>
-    </div>
+    <article class="example-card" data-example-card="${escapeAttr(example.id)}">
+      <div class="example-image-wrap">
+        <img src="${example.url}" alt="${escapeAttr(example.originalName || "Reference image")}" />
+        <button class="delete-example" type="button" title="Remove image" data-task-id="${escapeAttr(state.editingTaskId)}" data-delete-example="${escapeAttr(example.id)}">×</button>
+      </div>
+      <label>
+        <span>Current Tag Number</span>
+        <input data-example-tag inputmode="numeric" pattern="[0-9]*" value="${escapeAttr(example.tagNumber || "")}" placeholder="9729" />
+      </label>
+      <label>
+        <span>Cable In Photo</span>
+        <select data-example-color>
+          ${exampleColorOptions(example.cableColor || "")}
+        </select>
+      </label>
+      <button class="button secondary" type="button" data-task-id="${escapeAttr(state.editingTaskId)}" data-save-example="${escapeAttr(example.id)}">Save Example</button>
+    </article>
   `;
 }
 
@@ -493,6 +535,16 @@ function aspectRatioOptions(current) {
 function imageSizeOptions(current) {
   return ["512", "1K", "2K", "4K"]
     .map((size) => `<option value="${size}" ${size === current ? "selected" : ""}>${size}</option>`)
+    .join("");
+}
+
+function exampleColorOptions(current) {
+  return [
+    ["", "Unknown"],
+    ["orange", "Orange"],
+    ["black", "Black"]
+  ]
+    .map(([value, label]) => `<option value="${value}" ${value === current ? "selected" : ""}>${label}</option>`)
     .join("");
 }
 
