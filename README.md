@@ -24,6 +24,8 @@ DATA_DIR=/data
 
 Mount a persistent volume at `/data`. The app stores settings, admin task reference images, and generated history there.
 
+If you prefer a nested Coolify volume path such as `/data/qcbanana`, set `DATA_DIR=/data/qcbanana`. The container entrypoint creates the folder and fixes ownership before starting the app.
+
 ## App Setup
 
 1. Open `Settings` and add the Google AI API key.
