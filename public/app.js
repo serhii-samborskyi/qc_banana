@@ -6,7 +6,6 @@ const state = {
   tasks: [],
   history: [],
   settings: null,
-  selectedColor: "orange",
   selectedTaskId: "",
   editingTaskId: "",
   latestGeneration: null,
@@ -65,11 +64,7 @@ function renderGenerator() {
   const task = selectedTask();
   const latest = state.latestGeneration;
   const canGenerate = state.settings?.hasGoogleApiKey && state.tasks.length > 0 && !state.busy;
-  const colors = task?.allowedColors?.length ? task.allowedColors : ["orange", "black"];
   const taggedCount = task?.examples?.filter((example) => example.tagNumber)?.length || 0;
-  if (!colors.includes(state.selectedColor)) {
-    state.selectedColor = colors[0] || "orange";
-  }
 
   app.innerHTML = `
     <section class="layout">
@@ -90,12 +85,6 @@ function renderGenerator() {
             <span>Address Tag</span>
             <input name="addressNumber" autocomplete="off" placeholder="APT 6" maxlength="32" value="${escapeAttr(state.currentAddress)}" required />
           </label>
-          <div>
-            <div class="field-label">Cable Color</div>
-            <div class="segmented" role="group" aria-label="Cable color">
-              ${colors.map((color) => colorButton(color)).join("")}
-            </div>
-          </div>
           <div class="actions">
             <button class="button primary" type="submit" ${canGenerate ? "" : "disabled"}>
               ${state.busy ? `<span class="button-spinner" aria-hidden="true"></span>Generating...` : "Generate Image"}
@@ -117,7 +106,8 @@ function renderGenerator() {
             ? `<div class="result-frame"><img src="${latest.imageUrl}" alt="Generated QC result for address ${escapeAttr(latest.addressNumber)}" /></div>
                <div class="actions" style="margin-top: 12px;">
                  <a class="button secondary" href="${latest.downloadUrl}" download>Download</a>
-                 <span class="status ok">${escapeHtml(latest.cableColor)} cable · ${escapeHtml(latest.addressNumber)}</span>
+                 <span class="status ok">${escapeHtml(latest.addressNumber)}</span>
+                 ${latest.cableColor ? `<span class="status ok">${escapeHtml(latest.cableColor)} cable</span>` : ""}
                  ${latest.sourceTagNumber ? `<span class="status ok">from ${escapeHtml(latest.sourceTagNumber)}</span>` : ""}
                </div>`
             : `<div class="empty-state">Generated tap pictures will appear here.</div>`
@@ -129,23 +119,9 @@ function renderGenerator() {
   document.querySelector("#generateForm")?.addEventListener("submit", onGenerate);
   document.querySelector("select[name='taskId']")?.addEventListener("change", (event) => {
     state.selectedTaskId = event.target.value;
-    const nextTask = selectedTask();
-    state.selectedColor = nextTask?.allowedColors?.[0] || "orange";
     render();
   });
-  document.querySelectorAll("[data-color]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedColor = button.dataset.color;
-      render();
-    });
-  });
   document.querySelector("#refreshButton")?.addEventListener("click", bootstrap);
-}
-
-function colorButton(color) {
-  return `<button class="segment ${state.selectedColor === color ? "is-active" : ""}" type="button" data-color="${escapeAttr(color)}">
-    <span class="swatch ${escapeAttr(color)}"></span>${capitalize(color)}
-  </button>`;
 }
 
 async function onGenerate(event) {
@@ -163,8 +139,7 @@ async function onGenerate(event) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         taskId: form.get("taskId"),
-        addressNumber: form.get("addressNumber"),
-        cableColor: state.selectedColor
+        addressNumber: form.get("addressNumber")
       })
     });
     state.latestGeneration = generation;
@@ -583,11 +558,12 @@ function renderHistory() {
 }
 
 function historyCard(item) {
+  const title = item.cableColor ? `${item.addressNumber} · ${capitalize(item.cableColor)}` : item.addressNumber;
   return `
     <article class="thumb-card">
       <img src="${item.imageUrl}" alt="Generated ${escapeAttr(item.taskName)} for ${escapeAttr(item.addressNumber)}" />
       <div class="meta">
-        <h3>${escapeHtml(item.addressNumber)} · ${escapeHtml(capitalize(item.cableColor))}</h3>
+        <h3>${escapeHtml(title)}</h3>
         <p>${escapeHtml(item.taskName)}</p>
         <p>${formatDate(item.createdAt)}</p>
         <div class="actions">

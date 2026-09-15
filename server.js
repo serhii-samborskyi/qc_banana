@@ -289,13 +289,13 @@ app.post("/api/generate", async (req, res, next) => {
   try {
     const { taskId, addressNumber, cableColor } = req.body || {};
     const cleanAddress = normalizeAddressNumber(addressNumber);
-    const cleanColor = normalizeColor(cableColor);
+    const requestedColor = normalizeColor(cableColor);
 
     if (!cleanAddress) {
       return res.status(400).json({ error: "Enter an address tag using letters, numbers, spaces, or simple tag punctuation." });
     }
-    if (!cleanColor) {
-      return res.status(400).json({ error: "Choose orange or black cable." });
+    if (cleanString(cableColor) && !requestedColor) {
+      return res.status(400).json({ error: "Cable color must be orange or black." });
     }
 
     const [tasks, settings] = await Promise.all([getTasks(), getSettings()]);
@@ -303,8 +303,8 @@ app.post("/api/generate", async (req, res, next) => {
     if (!task) {
       return res.status(404).json({ error: "No task is configured yet." });
     }
-    if (!task.allowedColors?.includes(cleanColor)) {
-      return res.status(400).json({ error: `This task does not allow ${cleanColor} cable.` });
+    if (requestedColor && !task.allowedColors?.includes(requestedColor)) {
+      return res.status(400).json({ error: `This task does not allow ${requestedColor} cable.` });
     }
 
     const apiKey = getGoogleApiKey(settings);
@@ -315,11 +315,15 @@ app.post("/api/generate", async (req, res, next) => {
     const model = cleanString(task.model) || settings.defaultModel || defaultSettings.defaultModel;
     const aspectRatio = normalizeAspectRatio(task.aspectRatio, settings.defaultAspectRatio);
     const imageSize = normalizeImageSize(task.imageSize, settings.defaultImageSize);
-    const sourceExample = pickSourceExample(task.examples || [], cleanColor);
+    const sourceExample = pickSourceExample(task.examples || [], requestedColor);
+    const fallbackColor = task.allowedColors?.[0] || "orange";
+    const effectiveColor = requestedColor || sourceExample?.cableColor || (sourceExample ? "" : fallbackColor);
+    const promptCableColor = effectiveColor || "same as the source photo";
     const prompt = buildPrompt(task.prompt, {
       taskName: task.name,
       addressNumber: cleanAddress,
-      cableColor: cleanColor,
+      cableColor: promptCableColor,
+      requestedCableColor: requestedColor,
       sourceTagNumber: sourceExample?.tagNumber || "",
       sourceCableColor: sourceExample?.cableColor || ""
     });
@@ -367,7 +371,7 @@ app.post("/api/generate", async (req, res, next) => {
       taskId: task.id,
       taskName: task.name,
       addressNumber: cleanAddress,
-      cableColor: cleanColor,
+      cableColor: effectiveColor,
       model,
       aspectRatio,
       imageSize,
@@ -586,15 +590,19 @@ function normalizeImageSize(value, fallback) {
 
 function buildPrompt(template, variables) {
   const rendered = String(template || DEFAULT_PROMPT).replace(
-    /\{\{\s*(addressNumber|cableColor|taskName|sourceTagNumber|sourceCableColor)\s*\}\}/g,
+    /\{\{\s*(addressNumber|cableColor|taskName|sourceTagNumber|sourceCableColor|requestedCableColor)\s*\}\}/g,
     (_match, key) => variables[key] || ""
   );
 
   if (variables.sourceTagNumber) {
-    const cableInstruction =
-      variables.sourceCableColor && variables.sourceCableColor === variables.cableColor
+    let cableInstruction = "Preserve every visible cable exactly as in the source photo. Do not recolor cables, reroute them, add new cables, or remove cables.";
+    if (variables.requestedCableColor) {
+      cableInstruction = variables.sourceCableColor && variables.sourceCableColor === variables.requestedCableColor
         ? `The source photo already has a ${variables.cableColor} cable; preserve that cable exactly.`
         : `The requested cable color is ${variables.cableColor}. If the source photo cable is not ${variables.cableColor}, recolor only that cable with minimal editing and preserve its route, texture, fittings, bends, shadows, and thickness.`;
+    } else if (variables.sourceCableColor) {
+      cableInstruction = `The source photo has a ${variables.sourceCableColor} cable; preserve that cable exactly.`;
+    }
 
     return `${rendered}
 
@@ -622,11 +630,13 @@ function pickSourceExample(examples, cableColor) {
   const tagged = examples.filter((example) => normalizeOptionalTagNumber(example.tagNumber) && example.filename);
   if (!tagged.length) return null;
 
-  const matchingColor = tagged.filter((example) => example.cableColor === cableColor);
-  if (matchingColor.length) return randomItem(matchingColor);
+  if (cableColor) {
+    const matchingColor = tagged.filter((example) => example.cableColor === cableColor);
+    if (matchingColor.length) return randomItem(matchingColor);
 
-  const unknownColor = tagged.filter((example) => !example.cableColor);
-  if (unknownColor.length) return randomItem(unknownColor);
+    const unknownColor = tagged.filter((example) => !example.cableColor);
+    if (unknownColor.length) return randomItem(unknownColor);
+  }
 
   return randomItem(tagged);
 }
