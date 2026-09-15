@@ -24,6 +24,10 @@ body {
   color: var(--ink);
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 button,
 input,
 select,
@@ -404,6 +408,16 @@ textarea:focus {
   background: var(--soft);
 }
 
+.image-preview-button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  cursor: zoom-in;
+}
+
 .mini-image img {
   width: 100%;
   aspect-ratio: 1;
@@ -421,6 +435,7 @@ textarea:focus {
   position: absolute;
   top: 5px;
   right: 5px;
+  z-index: 2;
   min-width: 28px;
   min-height: 28px;
   border: 0;
@@ -443,6 +458,48 @@ textarea:focus {
   min-height: 38px;
   width: 100%;
   padding: 0 10px;
+}
+
+.image-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  background: rgba(12, 17, 15, 0.86);
+  padding: 18px;
+}
+
+.image-modal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.image-modal-bar h2 {
+  margin: 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-modal-body {
+  display: grid;
+  min-height: 0;
+  place-items: center;
+}
+
+.image-modal-body img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  object-fit: contain;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.32);
 }
 
 .checkbox-row {

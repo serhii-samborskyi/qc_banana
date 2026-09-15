@@ -21,6 +21,7 @@ const HISTORY_FILE = path.join(DATA_DIR, "history.json");
 const ALLOWED_COLORS = ["orange", "black"];
 const VALID_ASPECT_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
 const VALID_IMAGE_SIZES = ["512", "1K", "2K", "4K"];
+const TAG_TEXT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 .#/-]{0,31}$/;
 
 const DEFAULT_PROMPT = `Create a realistic close-up field photo for cable QC.
 
@@ -28,12 +29,12 @@ Subject:
 - A cable tap installed either on an aerial pole strand or at an underground pedestal / in bushes.
 - Show the tap hardware clearly, with weathered gray metal or plastic housing, connectors, coax fittings, brackets, screws, nearby cable lines, and real outdoor surroundings.
 - Connect one visible drop cable to the tap. The drop cable color must be {{cableColor}}.
-- Add a small durable cable tag near the drop cable, similar to field QC examples. The tag must clearly show address number {{addressNumber}} in handwritten black marker.
+- Add a small durable cable tag near the drop cable, similar to field QC examples. The tag must clearly show address tag {{addressNumber}} in handwritten black marker.
 
 Style:
 - Photorealistic phone camera image, close framing, shallow natural depth of field, real utility-work texture.
 - Do not make it a diagram, rendering, cartoon, or clean product photo.
-- Do not add any text except the address number on the cable tag.`;
+- Do not add any text except the address tag on the cable tag.`;
 
 const defaultSettings = {
   googleApiKey: "",
@@ -245,7 +246,7 @@ app.patch("/api/tasks/:taskId/examples/:exampleId", async (req, res, next) => {
     const tagNumber = normalizeOptionalTagNumber(req.body?.tagNumber);
     const cableColor = normalizeColor(req.body?.cableColor);
     if (tagNumber === null) {
-      return res.status(400).json({ error: "Example tag number must contain only digits." });
+      return res.status(400).json({ error: "Example tag must use letters, numbers, spaces, or simple tag punctuation." });
     }
 
     example.tagNumber = tagNumber;
@@ -291,7 +292,7 @@ app.post("/api/generate", async (req, res, next) => {
     const cleanColor = normalizeColor(cableColor);
 
     if (!cleanAddress) {
-      return res.status(400).json({ error: "Enter a numeric address number." });
+      return res.status(400).json({ error: "Enter an address tag using letters, numbers, spaces, or simple tag punctuation." });
     }
     if (!cleanColor) {
       return res.status(400).json({ error: "Choose orange or black cable." });
@@ -555,14 +556,18 @@ function normalizeColor(value) {
 }
 
 function normalizeAddressNumber(value) {
-  const number = String(value || "").trim();
-  return /^\d{1,12}$/.test(number) ? number : "";
+  return normalizeTagText(value) || "";
 }
 
 function normalizeOptionalTagNumber(value) {
-  const number = String(value || "").trim();
-  if (!number) return "";
-  return /^\d{1,12}$/.test(number) ? number : null;
+  const tag = String(value || "").trim().replace(/\s+/g, " ");
+  if (!tag) return "";
+  return TAG_TEXT_PATTERN.test(tag) ? tag : null;
+}
+
+function normalizeTagText(value) {
+  const tag = String(value || "").trim().replace(/\s+/g, " ");
+  return TAG_TEXT_PATTERN.test(tag) ? tag : "";
 }
 
 function cleanString(value) {
@@ -596,8 +601,8 @@ function buildPrompt(template, variables) {
 Source-image edit instructions:
 - Use the uploaded source photo as the actual base image, not just inspiration.
 - Keep the same tap hardware, connector layout, tag shape, tag position, camera angle, focus, lighting, weathering, background, bushes/pole/pedestal, and all non-address markings.
-- The source tag currently shows address number ${variables.sourceTagNumber}.
-- Replace only the address number ${variables.sourceTagNumber} on the physical tag with ${variables.addressNumber}.
+- The source tag currently shows address tag ${variables.sourceTagNumber}.
+- Replace only the address tag ${variables.sourceTagNumber} on the physical tag with ${variables.addressNumber}.
 - Match the same marker thickness, handwriting style, perspective, blur, shadows, and tag surface.
 - Do not add extra labels, serial numbers, barcodes, text, or a second tag.
 - ${cableInstruction}
@@ -608,8 +613,8 @@ Source-image edit instructions:
 
 Critical output checks:
 - The cable color is ${variables.cableColor}.
-- The only address number shown is ${variables.addressNumber}.
-- The address number must be legible on a physical tag attached near the cable.
+- The only address tag shown is ${variables.addressNumber}.
+- The address tag must be legible on a physical tag attached near the cable.
 - Use the uploaded example images as visual references for the tap hardware, connectors, field label/tag, and real-world camera look.`;
 }
 

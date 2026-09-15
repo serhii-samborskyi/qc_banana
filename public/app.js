@@ -75,7 +75,7 @@ function renderGenerator() {
       <div class="panel">
         <h2>Generate QC Picture</h2>
         ${state.settings?.hasGoogleApiKey ? "" : `<div class="notice">Add your Google AI key in Settings before generating.</div>`}
-        ${taggedCount ? `<div class="notice">Using random tagged example as the edit source. Only the address number is replaced when possible.</div>` : ""}
+        ${taggedCount ? `<div class="notice">Using random tagged example as the edit source. Only the address tag is replaced when possible.</div>` : ""}
         ${state.error ? `<div class="notice error">${escapeHtml(state.error)}</div>` : ""}
         ${state.message ? `<div class="notice">${escapeHtml(state.message)}</div>` : ""}
         <form id="generateForm" class="form-grid">
@@ -86,8 +86,8 @@ function renderGenerator() {
             </select>
           </label>
           <label>
-            <span>Address Number</span>
-            <input name="addressNumber" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="9729" required />
+            <span>Address Tag</span>
+            <input name="addressNumber" autocomplete="off" placeholder="APT 6" maxlength="32" required />
           </label>
           <div>
             <div class="field-label">Cable Color</div>
@@ -264,6 +264,9 @@ function renderAdmin() {
   document.querySelectorAll("[data-save-example]").forEach((button) => {
     button.addEventListener("click", () => updateExample(button.dataset.taskId, button.dataset.saveExample));
   });
+  document.querySelectorAll("[data-open-image]").forEach((button) => {
+    button.addEventListener("click", () => openImageModal(button.dataset.openImage, button.dataset.imageTitle || "Uploaded example"));
+  });
 }
 
 function blankTask() {
@@ -273,10 +276,10 @@ function blankTask() {
     prompt: `Create a realistic close-up field photo for cable QC.
 
 Task: {{taskName}}
-Address number: {{addressNumber}}
+Address tag: {{addressNumber}}
 Cable color: {{cableColor}}
 
-Use uploaded example images as the visual reference for hardware, environment, framing, and label/tag style. The address number must appear clearly on a physical tag near the cable.`,
+Use uploaded example images as the visual reference for hardware, environment, framing, and label/tag style. The address tag must appear clearly on a physical tag near the cable.`,
     allowedColors: ["orange", "black"],
     model: "",
     aspectRatio: state.settings?.defaultAspectRatio || "3:4",
@@ -381,12 +384,14 @@ function exampleImage(example) {
   return `
     <article class="example-card" data-example-card="${escapeAttr(example.id)}">
       <div class="example-image-wrap">
-        <img src="${example.url}" alt="${escapeAttr(example.originalName || "Reference image")}" />
+        <button class="image-preview-button" type="button" data-open-image="${escapeAttr(example.url)}" data-image-title="${escapeAttr(example.originalName || "Uploaded example")}" aria-label="Open ${escapeAttr(example.originalName || "uploaded example")} full size">
+          <img src="${example.url}" alt="${escapeAttr(example.originalName || "Reference image")}" />
+        </button>
         <button class="delete-example" type="button" title="Remove image" data-task-id="${escapeAttr(state.editingTaskId)}" data-delete-example="${escapeAttr(example.id)}">×</button>
       </div>
       <label>
-        <span>Current Tag Number</span>
-        <input data-example-tag inputmode="numeric" pattern="[0-9]*" value="${escapeAttr(example.tagNumber || "")}" placeholder="9729" />
+        <span>Current Tag</span>
+        <input data-example-tag value="${escapeAttr(example.tagNumber || "")}" placeholder="F15" maxlength="32" />
       </label>
       <label>
         <span>Cable In Photo</span>
@@ -397,6 +402,47 @@ function exampleImage(example) {
       <button class="button secondary" type="button" data-task-id="${escapeAttr(state.editingTaskId)}" data-save-example="${escapeAttr(example.id)}">Save Example</button>
     </article>
   `;
+}
+
+function openImageModal(src, title) {
+  closeImageModal();
+
+  const modal = document.createElement("div");
+  modal.className = "image-modal";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.innerHTML = `
+    <div class="image-modal-bar">
+      <h2>${escapeHtml(title)}</h2>
+      <button class="button secondary" type="button" data-close-modal>Close</button>
+    </div>
+    <div class="image-modal-body">
+      <img src="${escapeAttr(src)}" alt="${escapeAttr(title)}" />
+    </div>
+  `;
+
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal || event.target.closest("[data-close-modal]")) {
+      closeImageModal();
+    }
+  });
+
+  document.body.classList.add("modal-open");
+  document.body.append(modal);
+  document.addEventListener("keydown", closeModalOnEscape);
+  modal.querySelector("[data-close-modal]")?.focus();
+}
+
+function closeImageModal() {
+  document.querySelector(".image-modal")?.remove();
+  document.body.classList.remove("modal-open");
+  document.removeEventListener("keydown", closeModalOnEscape);
+}
+
+function closeModalOnEscape(event) {
+  if (event.key === "Escape") {
+    closeImageModal();
+  }
 }
 
 function renderSettings() {
