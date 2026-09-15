@@ -10,6 +10,7 @@ const state = {
   selectedTaskId: "",
   editingTaskId: "",
   latestGeneration: null,
+  currentAddress: "",
   busy: false,
   message: "",
   error: ""
@@ -87,7 +88,7 @@ function renderGenerator() {
           </label>
           <label>
             <span>Address Tag</span>
-            <input name="addressNumber" autocomplete="off" placeholder="APT 6" maxlength="32" required />
+            <input name="addressNumber" autocomplete="off" placeholder="APT 6" maxlength="32" value="${escapeAttr(state.currentAddress)}" required />
           </label>
           <div>
             <div class="field-label">Cable Color</div>
@@ -96,7 +97,9 @@ function renderGenerator() {
             </div>
           </div>
           <div class="actions">
-            <button class="button primary" type="submit" ${canGenerate ? "" : "disabled"}>${state.busy ? "Generating..." : "Generate Image"}</button>
+            <button class="button primary" type="submit" ${canGenerate ? "" : "disabled"}>
+              ${state.busy ? `<span class="button-spinner" aria-hidden="true"></span>Generating...` : "Generate Image"}
+            </button>
             <button class="button secondary" id="refreshButton" type="button">Refresh</button>
           </div>
         </form>
@@ -104,7 +107,13 @@ function renderGenerator() {
       <aside class="panel">
         <h2>Latest Result</h2>
         ${
-          latest
+          state.busy
+            ? `<div class="result-frame"><div class="progress-card">
+                 <div class="spinner-ring" aria-hidden="true"></div>
+                 <h3>Generating image</h3>
+                 <div class="progress-track"><span></span></div>
+               </div></div>`
+            : latest
             ? `<div class="result-frame"><img src="${latest.imageUrl}" alt="Generated QC result for address ${escapeAttr(latest.addressNumber)}" /></div>
                <div class="actions" style="margin-top: 12px;">
                  <a class="button secondary" href="${latest.downloadUrl}" download>Download</a>
@@ -142,6 +151,7 @@ function colorButton(color) {
 async function onGenerate(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
+  state.currentAddress = String(form.get("addressNumber") || "");
   state.busy = true;
   state.error = "";
   state.message = "";
@@ -267,6 +277,12 @@ function renderAdmin() {
   document.querySelectorAll("[data-open-image]").forEach((button) => {
     button.addEventListener("click", () => openImageModal(button.dataset.openImage, button.dataset.imageTitle || "Uploaded example"));
   });
+  document.querySelectorAll("[data-example-card]").forEach((card) => {
+    const sync = () => updateExampleDirtyState(card);
+    card.querySelector("[data-example-tag]")?.addEventListener("input", sync);
+    card.querySelector("[data-example-color]")?.addEventListener("change", sync);
+    updateExampleDirtyState(card);
+  });
 }
 
 function blankTask() {
@@ -381,9 +397,12 @@ function taskCard(task) {
 }
 
 function exampleImage(example) {
+  const statusClass = example.tagNumber ? "is-saved" : "is-missing";
+  const statusText = example.tagNumber ? "Saved" : "Missing tag";
   return `
-    <article class="example-card" data-example-card="${escapeAttr(example.id)}">
+    <article class="example-card" data-example-card="${escapeAttr(example.id)}" data-saved-tag="${escapeAttr(example.tagNumber || "")}" data-saved-color="${escapeAttr(example.cableColor || "")}">
       <div class="example-image-wrap">
+        <span class="example-save-badge ${statusClass}" data-example-status>${statusText}</span>
         <button class="image-preview-button" type="button" data-open-image="${escapeAttr(example.url)}" data-image-title="${escapeAttr(example.originalName || "Uploaded example")}" aria-label="Open ${escapeAttr(example.originalName || "uploaded example")} full size">
           <img src="${example.url}" alt="${escapeAttr(example.originalName || "Reference image")}" />
         </button>
@@ -402,6 +421,40 @@ function exampleImage(example) {
       <button class="button secondary" type="button" data-task-id="${escapeAttr(state.editingTaskId)}" data-save-example="${escapeAttr(example.id)}">Save Example</button>
     </article>
   `;
+}
+
+function updateExampleDirtyState(card) {
+  const tagInput = card.querySelector("[data-example-tag]");
+  const colorSelect = card.querySelector("[data-example-color]");
+  const status = card.querySelector("[data-example-status]");
+  const saveButton = card.querySelector("[data-save-example]");
+  const savedTag = card.dataset.savedTag || "";
+  const savedColor = card.dataset.savedColor || "";
+  const currentTag = normalizeClientTag(tagInput?.value || "");
+  const currentColor = colorSelect?.value || "";
+  const dirty = currentTag !== savedTag || currentColor !== savedColor;
+
+  card.classList.toggle("is-dirty", dirty);
+  if (saveButton) {
+    saveButton.disabled = !dirty;
+  }
+  if (!status) return;
+
+  status.classList.remove("is-saved", "is-dirty", "is-missing");
+  if (dirty) {
+    status.textContent = "Unsaved";
+    status.classList.add("is-dirty");
+  } else if (currentTag) {
+    status.textContent = "Saved";
+    status.classList.add("is-saved");
+  } else {
+    status.textContent = "Missing tag";
+    status.classList.add("is-missing");
+  }
+}
+
+function normalizeClientTag(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
 }
 
 function openImageModal(src, title) {

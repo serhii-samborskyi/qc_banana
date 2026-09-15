@@ -280,6 +280,15 @@ textarea:focus {
   opacity: 0.58;
 }
 
+.button-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: spin 0.75s linear infinite;
+}
+
 .notice {
   border: 1px solid #f0c79c;
   border-radius: 8px;
@@ -310,6 +319,48 @@ textarea:focus {
   height: 100%;
   max-height: 760px;
   object-fit: contain;
+}
+
+.progress-card {
+  display: grid;
+  width: min(320px, calc(100% - 48px));
+  justify-items: center;
+  gap: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.progress-card h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.spinner-ring {
+  width: 56px;
+  height: 56px;
+  border: 5px solid #cdd8cf;
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: spin 0.9s linear infinite;
+}
+
+.progress-track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dce4dd;
+}
+
+.progress-track span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), #ffd266);
+  animation: progress-slide 1.15s ease-in-out infinite;
 }
 
 .empty-state {
@@ -400,12 +451,47 @@ textarea:focus {
   padding: 10px;
 }
 
+.example-card.is-dirty {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(243, 111, 33, 0.14);
+}
+
 .example-image-wrap {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--soft);
+}
+
+.example-save-badge {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 2;
+  max-width: calc(100% - 50px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.example-save-badge.is-saved {
+  background: rgba(46, 114, 81, 0.94);
+}
+
+.example-save-badge.is-dirty {
+  background: rgba(243, 111, 33, 0.96);
+}
+
+.example-save-badge.is-missing {
+  background: rgba(98, 112, 103, 0.94);
 }
 
 .image-preview-button {
@@ -563,6 +649,26 @@ svg {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2.2;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes progress-slide {
+  0% {
+    transform: translateX(-105%);
+  }
+
+  50% {
+    transform: translateX(75%);
+  }
+
+  100% {
+    transform: translateX(240%);
+  }
 }
 
 @media (max-width: 840px) {

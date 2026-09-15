@@ -30,7 +30,7 @@ If you prefer a nested Coolify volume path such as `/data/qcbanana`, set `DATA_D
 
 1. Open `Settings` and add the Google AI API key.
 2. Open `Admin` and add reference images for the default task, or create new tasks with custom prompts.
-3. For each uploaded example, open the full-size preview if needed, then save the current address tag shown in the photo. Examples can be numeric or text labels such as `F15`, `N5`, or `APT 6`. Optionally set the cable color visible in that photo.
+3. For each uploaded example, open the full-size preview if needed, then save the current address tag shown in the photo. Each image card shows whether its tag/color metadata is saved, unsaved, or missing. Examples can be numeric or text labels such as `F15`, `N5`, or `APT 6`. Optionally set the cable color visible in that photo.
 4. Open `Generate`, enter the target address tag, choose orange or black, and generate.
 
 When a task has tagged examples, generation picks one random tagged example and asks Nano Banana to preserve the photo while replacing only the saved tag with the requested address tag. If an example cable color matches the requested cable color, that example is preferred.
