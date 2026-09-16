@@ -315,7 +315,7 @@ app.post("/api/generate", async (req, res, next) => {
     const model = cleanString(task.model) || settings.defaultModel || defaultSettings.defaultModel;
     const aspectRatio = normalizeAspectRatio(task.aspectRatio, settings.defaultAspectRatio);
     const imageSize = normalizeImageSize(task.imageSize, settings.defaultImageSize);
-    const sourceExample = pickSourceExample(task.examples || [], requestedColor);
+    const { example: sourceExample, nextRotationIndex } = pickSourceExample(task, requestedColor);
     const fallbackColor = task.allowedColors?.[0] || "orange";
     const effectiveColor = requestedColor || sourceExample?.cableColor || (sourceExample ? "" : fallbackColor);
     const promptCableColor = effectiveColor || "same as the source photo";
@@ -388,7 +388,13 @@ app.post("/api/generate", async (req, res, next) => {
 
     const history = await getHistory();
     history.unshift(generation);
-    await writeJson(HISTORY_FILE, history);
+    if (sourceExample) {
+      task.exampleRotationIndex = nextRotationIndex;
+      task.updatedAt = new Date().toISOString();
+      await Promise.all([writeJson(HISTORY_FILE, history), writeJson(TASKS_FILE, tasks)]);
+    } else {
+      await writeJson(HISTORY_FILE, history);
+    }
 
     res.status(201).json(publicGeneration(generation));
   } catch (error) {
@@ -626,23 +632,33 @@ Critical output checks:
 - Use the uploaded example images as visual references for the tap hardware, connectors, field label/tag, and real-world camera look.`;
 }
 
-function pickSourceExample(examples, cableColor) {
+function pickSourceExample(task, cableColor) {
+  const examples = task.examples || [];
   const tagged = examples.filter((example) => normalizeOptionalTagNumber(example.tagNumber) && example.filename);
-  if (!tagged.length) return null;
+  if (!tagged.length) {
+    return { example: null, nextRotationIndex: 0 };
+  }
+
+  let candidates = tagged;
 
   if (cableColor) {
     const matchingColor = tagged.filter((example) => example.cableColor === cableColor);
-    if (matchingColor.length) return randomItem(matchingColor);
-
-    const unknownColor = tagged.filter((example) => !example.cableColor);
-    if (unknownColor.length) return randomItem(unknownColor);
+    if (matchingColor.length) {
+      candidates = matchingColor;
+    } else {
+      const unknownColor = tagged.filter((example) => !example.cableColor);
+      if (unknownColor.length) {
+        candidates = unknownColor;
+      }
+    }
   }
 
-  return randomItem(tagged);
-}
-
-function randomItem(items) {
-  return items[Math.floor(Math.random() * items.length)];
+  const rotationIndex = Number.isInteger(task.exampleRotationIndex) ? task.exampleRotationIndex : 0;
+  const index = ((rotationIndex % candidates.length) + candidates.length) % candidates.length;
+  return {
+    example: candidates[index],
+    nextRotationIndex: (index + 1) % candidates.length
+  };
 }
 
 async function readImageInput(file, mimeType) {
