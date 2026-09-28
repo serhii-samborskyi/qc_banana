@@ -50,6 +50,7 @@ function render() {
   if (state.view === "generate") renderGenerator();
 
   bindTabs();
+  bindImagePreviewButtons();
 }
 
 function bindTabs() {
@@ -57,6 +58,12 @@ function bindTabs() {
     tab.onclick = () => {
       location.hash = tab.dataset.view;
     };
+  });
+}
+
+function bindImagePreviewButtons() {
+  document.querySelectorAll("[data-open-image]").forEach((button) => {
+    button.addEventListener("click", () => openImageModal(button.dataset.openImage, button.dataset.imageTitle || "Image preview"));
   });
 }
 
@@ -71,7 +78,7 @@ function renderGenerator() {
       <div class="panel">
         <h2>Generate QC Picture</h2>
         ${state.settings?.hasGoogleApiKey ? "" : `<div class="notice">Add your Google AI key in Settings before generating.</div>`}
-        ${taggedCount ? `<div class="notice">Using random tagged example as the edit source. Only the address tag is replaced when possible.</div>` : ""}
+        ${taggedCount ? `<div class="notice">Using the next tagged example as the edit source. Only the address tag is replaced when possible.</div>` : ""}
         ${state.error ? `<div class="notice error">${escapeHtml(state.error)}</div>` : ""}
         ${state.message ? `<div class="notice">${escapeHtml(state.message)}</div>` : ""}
         <form id="generateForm" class="form-grid">
@@ -106,6 +113,7 @@ function renderGenerator() {
             ? `<div class="result-frame"><img src="${latest.imageUrl}" alt="Generated QC result for address ${escapeAttr(latest.addressNumber)}" /></div>
                <div class="actions" style="margin-top: 12px;">
                  <a class="button secondary" href="${latest.downloadUrl}" download>Download</a>
+                 <button class="button secondary" type="button" data-open-image="${escapeAttr(latest.imageUrl)}" data-image-title="Generated ${escapeAttr(latest.addressNumber)}">Open Full Screen</button>
                  <span class="status ok">${escapeHtml(latest.addressNumber)}</span>
                  ${latest.cableColor ? `<span class="status ok">${escapeHtml(latest.cableColor)} cable</span>` : ""}
                  ${latest.sourceTagNumber ? `<span class="status ok">from ${escapeHtml(latest.sourceTagNumber)}</span>` : ""}
@@ -248,9 +256,6 @@ function renderAdmin() {
   });
   document.querySelectorAll("[data-save-example]").forEach((button) => {
     button.addEventListener("click", () => updateExample(button.dataset.taskId, button.dataset.saveExample));
-  });
-  document.querySelectorAll("[data-open-image]").forEach((button) => {
-    button.addEventListener("click", () => openImageModal(button.dataset.openImage, button.dataset.imageTitle || "Uploaded example"));
   });
   document.querySelectorAll("[data-example-card]").forEach((card) => {
     const sync = () => updateExampleDirtyState(card);
@@ -568,6 +573,7 @@ function historyCard(item) {
         <p>${formatDate(item.createdAt)}</p>
         <div class="actions">
           <a class="button secondary" href="${item.downloadUrl}" download>Download</a>
+          <button class="button secondary" type="button" data-open-image="${escapeAttr(item.imageUrl)}" data-image-title="Generated ${escapeAttr(item.addressNumber)}">Open Full Screen</button>
           <button class="button danger" type="button" data-delete-history="${escapeAttr(item.id)}">Delete</button>
         </div>
       </div>
